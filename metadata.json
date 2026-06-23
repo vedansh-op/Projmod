@@ -1,0 +1,6 @@
+{
+  "name": "ProjMod Ultimate",
+  "description": "Comprehensive School and College Academic Project Generator using AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
