@@ -10,6 +10,7 @@ class AppContainer(private val context: Context) {
             ProjectDatabase::class.java,
             "project_database.db"
         )
+        .addMigrations(ProjectDatabase.MIGRATION_2_3)
         .fallbackToDestructiveMigration()
         .build()
     }

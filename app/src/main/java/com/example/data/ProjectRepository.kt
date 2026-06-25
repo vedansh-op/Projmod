@@ -51,15 +51,31 @@ class ProjectRepository(private val projectDao: ProjectDao) {
         title: String,
         content: String
     ) = withContext(Dispatchers.IO) {
+        val project = projectDao.getProjectById(projectId)
+        if (project?.isLocked == true) return@withContext
+
+        val existing = projectDao.getSectionById(sectionId)
         val section = ProjectSection(
             id = sectionId,
             projectId = projectId,
             sectionIndex = sectionIndex,
             sectionTitle = title,
             content = content,
-            generatedAt = System.currentTimeMillis()
+            generatedAt = System.currentTimeMillis(),
+            illustrationUrl = existing?.illustrationUrl
         )
         projectDao.insertSection(section)
+    }
+
+    suspend fun updateSectionIllustration(sectionId: Int, projectId: Int, url: String) = withContext(Dispatchers.IO) {
+        val project = projectDao.getProjectById(projectId)
+        if (project?.isLocked == true) return@withContext
+
+        projectDao.updateSectionIllustration(sectionId, url)
+    }
+
+    suspend fun toggleProjectLock(id: Int, locked: Boolean) = withContext(Dispatchers.IO) {
+        projectDao.updateProjectLock(id, locked)
     }
 
     suspend fun updateProjectMetadata(
@@ -73,7 +89,7 @@ class ProjectRepository(private val projectDao: ProjectDao) {
         extraInstructions: String
     ) = withContext(Dispatchers.IO) {
         val existing = projectDao.getProjectById(id)
-        if (existing != null) {
+        if (existing != null && !existing.isLocked) {
             val updated = existing.copy(
                 title = title,
                 subject = subject,
@@ -102,6 +118,7 @@ class ProjectRepository(private val projectDao: ProjectDao) {
 
     suspend fun generateNextSection(projectId: Int): String = withContext(Dispatchers.IO) {
         val project = projectDao.getProjectById(projectId) ?: return@withContext "Error: Project not found"
+        if (project.isLocked) return@withContext "Error: Project is locked and cannot be modified."
         val existingSections = projectDao.getSectionsForProject(projectId)
 
         val nextSectionToGenerate = if (existingSections.isEmpty()) {

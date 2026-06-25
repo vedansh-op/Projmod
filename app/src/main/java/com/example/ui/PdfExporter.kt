@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
@@ -231,6 +232,42 @@ object PdfExporter {
                         canvas.drawText(wrappedLine, 50f, currentY, currentPaint)
                         currentY += lineSpacing
                     }
+                }
+
+                // Illustration check
+                if (section.illustrationUrl != null) {
+                    if (currentY > pageHeight - 250f) {
+                        // Footer before finishing page
+                        val pageNumStr = "Page ${pageNumber - 1}"
+                        canvas.drawText(pageNumStr, pageWidth - 50f - footerPaint.measureText(pageNumStr), pageHeight - 45f, footerPaint)
+                        pdfDocument.finishPage(page)
+
+                        // Start next page
+                        pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber++).create()
+                        page = pdfDocument.startPage(pageInfo)
+                        canvas = page.canvas
+
+                        // Header for new page
+                        canvas.drawText(project.title.take(45) + if (project.title.length > 45) "..." else "", 50f, 45f, footerPaint)
+                        canvas.drawLine(50f, 52f, pageWidth - 50f, 52f, linePaint)
+
+                        currentY = 80f
+                    }
+
+                    currentY += 20f
+                    val rect = RectF(100f, currentY, pageWidth - 100f, currentY + 180f)
+                    val fillPaint = Paint().apply { color = Color.rgb(240, 244, 248); style = Paint.Style.FILL }
+                    val strokePaint = Paint().apply { color = Color.rgb(203, 213, 224); style = Paint.Style.STROKE; strokeWidth = 1f }
+
+                    canvas.drawRoundRect(rect, 8f, 8f, fillPaint)
+                    canvas.drawRoundRect(rect, 8f, 8f, strokePaint)
+
+                    val illusText = "[Section Illustration: AI Generated]"
+                    val urlText = "Ref: " + (section.illustrationUrl.take(60) + if (section.illustrationUrl.length > 60) "..." else "")
+                    canvas.drawText(illusText, (pageWidth - bodyPaint.measureText(illusText)) / 2f, currentY + 90f, bodyPaint)
+                    canvas.drawText(urlText, (pageWidth - footerPaint.measureText(urlText)) / 2f, currentY + 110f, footerPaint)
+
+                    currentY += 200f
                 }
 
                 // Page Footer for Section ending

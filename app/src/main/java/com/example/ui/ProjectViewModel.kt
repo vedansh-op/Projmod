@@ -55,6 +55,8 @@ class ProjectViewModel(
     val diagramSchemaError = _diagramSchemaError.asStateFlow()
 
     fun generateLabCode(topic: String, language: String, extraInstructions: String = "") {
+        if (_isGeneratingCode.value || _selectedProject.value?.isLocked == true) return
+
         _isGeneratingCode.value = true
         _codeError.value = null
         _codeOutput.value = null
@@ -100,6 +102,8 @@ class ProjectViewModel(
     }
 
     fun generateDiagramSchema(topic: String, subject: String) {
+        if (_isGeneratingDiagramSchema.value || _selectedProject.value?.isLocked == true) return
+
         _isGeneratingDiagramSchema.value = true
         _diagramSchemaError.value = null
         _diagramSchemaOutput.value = null
@@ -225,6 +229,8 @@ class ProjectViewModel(
 
     fun generateNextSection() {
         val projectId = _selectedProjectId.value ?: return
+        if (_isGenerating.value || _selectedProject.value?.isLocked == true) return
+
         _isGenerating.value = true
         _generationError.value = null
         _generationSuccess.value = false
@@ -255,6 +261,20 @@ class ProjectViewModel(
     fun updateSectionContent(sectionId: Int, projectId: Int, sectionIndex: Int, title: String, content: String) {
         viewModelScope.launch {
             repository.updateSectionContent(sectionId, projectId, sectionIndex, title, content)
+            loadProjectDetails(projectId)
+        }
+    }
+
+    fun updateSectionIllustration(sectionId: Int, projectId: Int, url: String) {
+        viewModelScope.launch {
+            repository.updateSectionIllustration(sectionId, url)
+            loadProjectDetails(projectId)
+        }
+    }
+
+    fun toggleProjectLock(projectId: Int, locked: Boolean) {
+        viewModelScope.launch {
+            repository.toggleProjectLock(projectId, locked)
             loadProjectDetails(projectId)
         }
     }

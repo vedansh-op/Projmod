@@ -43,6 +43,8 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Share
@@ -84,6 +86,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ModalNavigationDrawer
@@ -180,7 +183,6 @@ fun ProjModApp(viewModel: ProjectViewModel) {
         }
     }
 }
-
 @Composable
 fun DashboardScreen(viewModel: ProjectViewModel) {
     val projects by viewModel.allProjects.collectAsState()
@@ -1502,7 +1504,9 @@ fun ProjectWorkspaceScreen(
     val context = LocalContext.current
 
     var showMetadataDialog by remember { mutableStateOf(false) }
-    var editingDraftContent by remember { mutableStateOf("") }
+    var isEditingSectionContent by remember { mutableStateOf(false) }
+    var showDiscardEditsConfirm by remember { mutableStateOf(false) }
+    var editingSectionContent by remember { mutableStateOf("") }
     var onSpeechAppended: ((String) -> Unit)? by remember { mutableStateOf(null) }
 
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
@@ -1911,6 +1915,25 @@ fun ProjectWorkspaceScreen(
                     ) {
                         Icon(imageVector = Icons.Default.PictureAsPdf, contentDescription = "Export to PDF")
                     }
+
+                    IconButton(
+                        onClick = { showMetadataDialog = true },
+                        enabled = !project.isLocked,
+                        modifier = Modifier.testTag("edit_metadata_button")
+                    ) {
+                        Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Settings")
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.toggleProjectLock(project.id, !project.isLocked) },
+                        modifier = Modifier.testTag("toggle_lock_button")
+                    ) {
+                        Icon(
+                            imageVector = if (project.isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                            contentDescription = if (project.isLocked) "Unlock Project" else "Lock Project",
+                            tint = if (project.isLocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -2029,6 +2052,19 @@ fun ProjectWorkspaceScreen(
                                     modifier = Modifier.weight(1f)
                                 )
                                 Row {
+                                    IconButton(
+                                        onClick = {
+                                            editingSectionContent = currentSection.content
+                                            isEditingSectionContent = true
+                                        },
+                                        enabled = !project.isLocked
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit Section",
+                                            tint = if (project.isLocked) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary
+                                        )
+                                    }
                                     IconButton(onClick = {
                                         clipboardManager.setText(AnnotatedString(currentSection.content))
                                         Toast.makeText(context, "Copied section to clipboard", Toast.LENGTH_SHORT).show()
@@ -2061,19 +2097,33 @@ fun ProjectWorkspaceScreen(
                             PowerCodeLab(
                                 viewModel = viewModel,
                                 projectTitle = project.title,
-                                subject = project.subject
+                                subject = project.subject,
+                                isLocked = project.isLocked
                             )
 
                             // 4. AI Prompt Designer & Slide illustration blueprint
                             AIDiagramDesigner(
                                 viewModel = viewModel,
                                 projectTitle = project.title,
-                                subject = project.subject
+                                subject = project.subject,
+                                isLocked = project.isLocked
+                            )
+
+                            // 5. Academic Section Illustration
+                            AcademicIllustrationCard(
+                                sectionTitle = currentSection.sectionTitle,
+                                sectionContent = currentSection.content,
+                                subject = project.subject,
+                                initialUrl = currentSection.illustrationUrl,
+                                isLocked = project.isLocked,
+                                onUrlGenerated = { url ->
+                                    viewModel.updateSectionIllustration(currentSection.id, project.id, url)
+                                }
                             )
 
                             Spacer(modifier = Modifier.height(24.dp))
 
-                            // 5. Academic Citation Helper & Bibliography Tracker
+                            // 6. Academic Citation Helper & Bibliography Tracker
                             AcademicCitationHelper(
                                 projectTopic = project.title,
                                 subject = project.subject
@@ -2157,16 +2207,124 @@ fun ProjectWorkspaceScreen(
             BottomActionBar(
                 sectionsCount = sections.size,
                 isGenerating = isGenerating,
+                isLocked = project.isLocked,
                 error = error,
                 onGenerateNext = { viewModel.generateNextSection() },
                 onClearError = { viewModel.clearError() }
             )
         }
-    }
-}
-)
-}
 
+        if (showMetadataDialog) {
+            EditMetadataDialog(
+                project = project,
+                onDismiss = { showMetadataDialog = false },
+                onSubmit = { title, subject, name, roll, school, level, extra ->
+                    viewModel.updateProjectMetadata(
+                        id = project.id,
+                        title = title,
+                        subject = subject,
+                        studentName = name,
+                        rollNumber = roll,
+                        schoolName = school,
+                        academicLevel = level,
+                        extraInstructions = extra
+                    )
+                    showMetadataDialog = false
+                    Toast.makeText(context, "Project Settings Updated!", Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
+
+        if (isEditingSectionContent) {
+            val currentSection = sections.find { it.sectionIndex == activeSectionIndex }
+            if (currentSection != null) {
+                Dialog(onDismissRequest = {
+                    if (editingSectionContent != currentSection.content) {
+                        showDiscardEditsConfirm = true
+                    } else {
+                        isEditingSectionContent = false
+                    }
+                }) {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.8f)
+                            .padding(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Edit Section: ${currentSection.sectionTitle}",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = editingSectionContent,
+                                onValueChange = { editingSectionContent = it },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                label = { Text("Content (Markdown)") }
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                TextButton(onClick = {
+                                    if (editingSectionContent != currentSection.content) {
+                                        showDiscardEditsConfirm = true
+                                    } else {
+                                        isEditingSectionContent = false
+                                    }
+                                }) {
+                                    Text("Cancel")
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(onClick = {
+                                    viewModel.updateSectionContent(
+                                        sectionId = currentSection.id,
+                                        projectId = project.id,
+                                        sectionIndex = currentSection.sectionIndex,
+                                        title = currentSection.sectionTitle,
+                                        content = editingSectionContent
+                                    )
+                                    isEditingSectionContent = false
+                                    Toast.makeText(context, "Section Updated!", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Text("Save")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+        if (showDiscardEditsConfirm) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showDiscardEditsConfirm = false },
+                title = { Text("Discard Changes?") },
+                text = { Text("You have unsaved changes. Are you sure you want to discard them?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showDiscardEditsConfirm = false
+                        isEditingSectionContent = false
+                    }) {
+                        Text("Discard", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDiscardEditsConfirm = false }) {
+                        Text("Keep Editing")
+                    }
+                }
+            )
+        }
+}
 @Composable
 fun SectionTimelineBar(
     sectionsGenerated: Int,
@@ -2183,13 +2341,11 @@ fun SectionTimelineBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "Project Outline",
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
@@ -2277,6 +2433,7 @@ fun SectionTimelineBar(
 fun BottomActionBar(
     sectionsCount: Int,
     isGenerating: Boolean,
+    isLocked: Boolean = false,
     error: String?,
     onGenerateNext: () -> Unit,
     onClearError: () -> Unit
@@ -2357,7 +2514,7 @@ fun BottomActionBar(
                     }
                     Button(
                         onClick = onGenerateNext,
-                        enabled = !isGenerating,
+                        enabled = !isGenerating && !isLocked,
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
@@ -3259,7 +3416,8 @@ fun InteractiveLabCharts(projectTopic: String, subject: String) {
 fun PowerCodeLab(
     viewModel: ProjectViewModel,
     projectTitle: String,
-    subject: String
+    subject: String,
+    isLocked: Boolean = false
 ) {
     val codeOutput by viewModel.codeOutput.collectAsState()
     val isGenerating by viewModel.isGeneratingCode.collectAsState()
@@ -3334,7 +3492,7 @@ fun PowerCodeLab(
             if (codeOutput == null) {
                 Button(
                     onClick = { viewModel.generateLabCode(projectTitle, selectedLanguage) },
-                    enabled = !isGenerating,
+                    enabled = !isGenerating && !isLocked,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -3446,7 +3604,8 @@ fun PowerCodeLab(
 fun AIDiagramDesigner(
     viewModel: ProjectViewModel,
     projectTitle: String,
-    subject: String
+    subject: String,
+    isLocked: Boolean = false
 ) {
     val schemaOutput by viewModel.diagramSchemaOutput.collectAsState()
     val isGenerating by viewModel.isGeneratingDiagramSchema.collectAsState()
@@ -3490,7 +3649,7 @@ fun AIDiagramDesigner(
             if (schemaOutput == null) {
                 Button(
                     onClick = { viewModel.generateDiagramSchema(projectTitle, subject) },
-                    enabled = !isGenerating,
+                    enabled = !isGenerating && !isLocked,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -4185,9 +4344,12 @@ private fun getAuthorLastName(authors: String): String {
 fun AcademicIllustrationCard(
     sectionTitle: String,
     sectionContent: String,
-    subject: String
+    subject: String,
+    initialUrl: String? = null,
+    isLocked: Boolean = false,
+    onUrlGenerated: (String) -> Unit = {}
 ) {
-    var generatedUrl by remember(sectionTitle) { mutableStateOf<String?>(null) }
+    var generatedUrl by remember(sectionTitle) { mutableStateOf(initialUrl) }
     var isGenerating by remember(sectionTitle) { mutableStateOf(false) }
     var illustrationStyle by remember { mutableStateOf("Textbook Vector Diagram") }
     var generationStatus by remember { mutableStateOf("") }
@@ -4309,10 +4471,13 @@ fun AcademicIllustrationCard(
                                         generationStatus = "Rendering illustration..."
                                         kotlinx.coroutines.delay(1000)
                                         val encodedPrompt = java.net.URLEncoder.encode(prompt, "UTF-8")
-                                        generatedUrl = "https://image.pollinations.ai/prompt/$encodedPrompt?width=800&height=600&nologo=true"
+                                        val url = "https://image.pollinations.ai/prompt/$encodedPrompt?width=800&height=600&nologo=true"
+                                        generatedUrl = url
+                                        onUrlGenerated(url)
                                         isGenerating = false
                                     }
                                 },
+                                enabled = !isLocked,
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
@@ -4361,6 +4526,7 @@ fun AcademicIllustrationCard(
                                     // Reset/Regenerate
                                     generatedUrl = null
                                 },
+                                enabled = !isLocked,
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.height(36.dp)
