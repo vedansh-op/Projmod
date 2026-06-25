@@ -267,7 +267,7 @@ class ProjectViewModel(
 
     fun updateSectionIllustration(sectionId: Int, projectId: Int, url: String) {
         viewModelScope.launch {
-            repository.updateSectionIllustration(sectionId, url)
+            repository.updateSectionIllustration(sectionId, projectId, url)
             loadProjectDetails(projectId)
         }
     }

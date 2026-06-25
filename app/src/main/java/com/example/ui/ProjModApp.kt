@@ -2304,27 +2304,6 @@ fun ProjectWorkspaceScreen(
             }
         }
     }
-        if (showDiscardEditsConfirm) {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showDiscardEditsConfirm = false },
-                title = { Text("Discard Changes?") },
-                text = { Text("You have unsaved changes. Are you sure you want to discard them?") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        showDiscardEditsConfirm = false
-                        isEditingSectionContent = false
-                    }) {
-                        Text("Discard", color = MaterialTheme.colorScheme.error)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDiscardEditsConfirm = false }) {
-                        Text("Keep Editing")
-                    }
-                }
-            )
-        }
-}
 @Composable
 fun SectionTimelineBar(
     sectionsGenerated: Int,
